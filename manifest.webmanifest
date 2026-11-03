@@ -1,0 +1,15 @@
+{
+  "name": "Air Pistol Log",
+  "short_name": "Pistol Log",
+  "description": "10 m air pistol practice and competition log with target scanning",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ECEEEA",
+  "theme_color": "#1C2336",
+  "icons": [
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
