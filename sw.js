@@ -1,5 +1,6 @@
-// Air Pistol Log offline support: keeps the app working at the range without signal.
-const V = 'apl-v1';
+// Air Pistol Log offline support.
+// Opens instantly from the saved copy, then quietly fetches any newer version for the next start.
+const V = 'apl-v2';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -12,10 +13,18 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   const u = new URL(e.request.url);
   if (u.origin === location.origin){
-    // newest version when online, cached copy when offline
-    e.respondWith(fetch(e.request).then(r => { const cp = r.clone(); caches.open(V).then(c => c.put(e.request, cp)); return r; })
-      .catch(() => caches.match(e.request).then(r => r || caches.match('./index.html'))));
+    const key = e.request.mode === 'navigate' ? './index.html' : e.request;
+    e.respondWith(caches.open(V).then(async c => {
+      const hit = await c.match(key, {ignoreSearch: true});
+      const fresh = fetch(e.request).then(r => { if (r.ok) c.put(key, r.clone()); return r; }).catch(() => null);
+      if (hit){ e.waitUntil(fresh); return hit; }
+      return (await fresh) || new Response('Offline', {status: 503});
+    }));
   } else if (u.hostname.endsWith('googleapis.com') || u.hostname.endsWith('gstatic.com')){
-    e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { const cp = res.clone(); caches.open(V).then(c => c.put(e.request, cp)); return res; })));
+    e.respondWith(caches.open(V).then(async c => {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const r = await fetch(e.request); if (r.ok || r.type === 'opaque') c.put(e.request, r.clone()); return r;
+    }));
   }
 });
