@@ -1,6 +1,6 @@
 // Air Pistol Log offline support.
 // Opens instantly from the saved copy, then quietly fetches any newer version for the next start.
-const V = 'apl-v2';
+const V = 'apl-v3';
 const CORE = ['./', './index.html', './manifest.webmanifest', './icon-512.png'];
 
 self.addEventListener('install', e => {
@@ -20,7 +20,8 @@ self.addEventListener('fetch', e => {
       if (hit){ e.waitUntil(fresh); return hit; }
       return (await fresh) || new Response('Offline', {status: 503});
     }));
-  } else if (u.hostname.endsWith('googleapis.com') || u.hostname.endsWith('gstatic.com')){
+  } else if (u.hostname === 'fonts.googleapis.com' || u.hostname === 'fonts.gstatic.com' || (u.hostname === 'www.gstatic.com' && u.pathname.startsWith('/firebasejs/'))){
+    // fonts and the pinned sign-in library never change, so keep them for offline use. Sync traffic is never cached.
     e.respondWith(caches.open(V).then(async c => {
       const hit = await c.match(e.request);
       if (hit) return hit;
