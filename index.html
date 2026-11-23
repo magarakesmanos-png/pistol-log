@@ -479,14 +479,7 @@ function writeCache(){ try { localStorage.setItem(LS_KEY, JSON.stringify({sessio
 
 // ---------- Google account sync (Firebase sign-in + Firestore) ----------
 // The firebaseConfig object from the Firebase console goes here.
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyD3l_i_3RNZBfKavxuGTxKWPveym4fwT48",
-  authDomain: "pistol-log.firebaseapp.com",
-  projectId: "pistol-log",
-  storageBucket: "pistol-log.firebasestorage.app",
-  messagingSenderId: "740713973454",
-  appId: "1:740713973454:web:9bcfa9c217ce460d2d329f"
-};
+const FIREBASE_CONFIG = null;   // online sync is off; sessions are saved on this phone
 const FB_URL = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const cloud = {fb: null, auth: null, db: null, user: null, ready: false, error: '', unsub: null, confirmOut: false};
 
