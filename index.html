@@ -185,6 +185,17 @@ textarea.titlein.ta{border:0;border-radius:0;background:transparent;resize:none;
 .tag.nt.ok{background:transparent;color:var(--good);box-shadow:inset 0 0 0 2px var(--good)}
 .item .sn{font-size:13.5px;color:var(--ink);opacity:.85;margin-top:3px;overflow-wrap:anywhere}
 .item .sn.sol b{color:var(--good);font-weight:600}
+.tag.nt.man{background:var(--sunk);color:var(--ink)}
+.mtitle{font-family:var(--f-display);font-weight:700;font-size:28px;line-height:1.1;margin:4px 0 12px;text-wrap:balance}
+.mbody{font-size:16px;line-height:1.55}
+.mbody ul{margin:0 0 12px}
+.mwarn{border-left:3px solid var(--accent);background:var(--accent-soft);padding:8px 12px;border-radius:0 8px 8px 0;margin:0 0 12px;font-weight:500}
+.mtip{border-left:3px solid var(--good);padding:2px 0 2px 12px;color:var(--muted)}
+.mfig{margin:14px 0;background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;max-width:520px}
+.mfig img{display:block;width:100%;height:auto}
+.mnav{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.mnav .btn{flex-direction:column;align-items:flex-start;gap:2px;min-width:0;font-weight:400;font-size:13px;color:var(--muted)}
+.mnav .btn b{color:var(--ink);font-weight:600;font-size:14px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .probbar{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:12px;background:transparent;width:100%;text-align:left;font-weight:500}
 @media (max-width:520px){
   .kpis{grid-template-columns:repeat(2,1fr)}
@@ -720,6 +731,7 @@ class TargetView {
 
 // ---------- UI ----------
 const ICON = {
+  book: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="18" height="18"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21V5M8 7h7"/></svg>',
   cam: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
   img: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 16l5-5 5 5 3-3 5 5"/></svg>',
   plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>',
@@ -736,13 +748,14 @@ function storageChip(){
 }
 function updateChip(){ document.querySelectorAll('.chip.st').forEach(el => { el.outerHTML = storageChip(); }); }
 function render(){
-  const tab = S.view === 'session' ? 'home' : S.view === 'note' ? 'notes' : S.view;
+  const tab = S.view === 'session' ? 'home' : (S.view === 'note' || S.view === 'manual') ? 'notes' : S.view;
   document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
   const app = $('#app');
   if (S.view === 'session' && curSession()) return renderSession(app);
   if (S.view === 'session') S.view = 'home';
   if (S.view === 'note'){ renderNote(app); growTitle(); return; }
   if (S.view === 'notes') return renderNotes(app);
+  if (S.view === 'manual') return renderManual(app);
   if (S.view === 'progress') return renderProgress(app);
   if (S.view === 'data') return renderData(app);
   renderHome(app);
@@ -905,13 +918,13 @@ function refreshComp(){
 // ---------- notebook: technique notes and problems ----------
 const NOTE_CATS = [
   ['trigger', 'Trigger'], ['sights', 'Sights & aiming'], ['stability', 'Stability & hold'], ['position', 'Position & stance'],
-  ['grip', 'Grip'], ['breathing', 'Breathing'], ['mental', 'Mental & routine'], ['maintenance', 'Pistol maintenance'], ['other', 'Other']
+  ['grip', 'Grip'], ['breathing', 'Breathing'], ['mental', 'Mental & routine'], ['maintenance', 'Manual & maintenance'], ['other', 'Other']
 ];
 const catName = k => (NOTE_CATS.find(c => c[0] === k) || NOTE_CATS[NOTE_CATS.length - 1])[1];
 const NB = {q: '', cat: 'all', confirmDel: false};
 // Search ignores capitals, Greek accents and final ς, so "τονος" finds "Τόνος".
 const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ς/g, 'σ');
-function noteText(n){ return norm([n.title, n.body, n.solution, catName(n.cat)].join(' \n ')); }
+function noteText(n){ return n._t || norm([n.title, n.body, n.solution, catName(n.cat), n.kw].join(' \n ')); }
 function noteMatches(n, q){ const words = norm(q).split(/\s+/).filter(Boolean); if (!words.length) return true; const t = noteText(n); return words.every(w => t.includes(w)); }
 function allNotes(){ return Object.values(S.notes).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); }
 function openProblems(){ return Object.values(S.notes).filter(n => n.kind === 'problem' && n.status !== 'solved'); }
@@ -937,7 +950,9 @@ function renderNotes(app){
   let list = all.filter(n => noteMatches(n, q));
   if (NB.cat === 'open') list = list.filter(n => n.kind === 'problem' && n.status !== 'solved');
   else if (NB.cat !== 'all') list = list.filter(n => n.cat === NB.cat);
-  const count = k => all.filter(n => n.cat === k).length, nOpen = openProblems().length;
+  const count = k => all.filter(n => n.cat === k).length + (k === 'maintenance' ? MANUAL.length : 0), nOpen = openProblems().length;
+  const showManual = NB.cat === 'maintenance' || (q && NB.cat === 'all');
+  const man = showManual ? MANUAL.filter(m => noteMatches(m, q)) : [];
   const chips = [['all', 'All', all.length], ['open', 'Open problems', nOpen], ...NOTE_CATS.map(([k, l]) => [k, l, count(k)])];
   const rows = list.map(n => {
     const prob = n.kind === 'problem', solved = prob && n.status === 'solved';
@@ -949,13 +964,20 @@ function renderNotes(app){
         ${main ? `<div class="sn">${esc(main)}</div>` : ''}
         ${solved && n.solution && !q ? `<div class="sn sol"><b>Solution:</b> ${esc(snippet(n.solution, 110))}</div>` : ''}</span></button>`;
   }).join('');
+  let listHtml = '';
+  if (man.length && NB.cat === 'maintenance' && !q){
+    listHtml = `<div class="list">${MANUAL_GROUPS.map(g => `<div class="month">Manual · ${esc(g)}</div>` + man.filter(m => m.g === g).map(m => manualRow(m, q)).join('')).join('')}
+      <div class="month">My maintenance notes</div>${rows || '<div class="empty" style="padding:14px">No notes yet. Tap <b>New note</b> to add your own, such as cleaning dates or settings.</div>'}</div>`;
+  } else if (man.length || list.length){
+    listHtml = `<div class="list">${list.length && man.length ? '<div class="month">My notes</div>' : ''}${rows}${man.length ? `<div class="month">From the Steyr evo 10 manual</div>${man.map(m => manualRow(m, q)).join('')}` : ''}</div>`;
+  }
   let empty = '';
-  if (!all.length) empty = `<div class="empty prose" style="text-align:left;margin:0 auto">
+  if (!all.length && !showManual) empty = `<div class="empty prose" style="text-align:left;margin:0 auto">
       <p><b>Your shooting notebook is empty.</b></p>
       <p>Use <b>New note</b> for what you learn about technique: trigger, sights, hold, stance, grip, and pistol maintenance.</p>
       <p>Use <b>New problem</b> when something goes wrong. Write what happened, and the solution when you find it. Open problems stay on your list until you mark them solved.</p>
       <p>Later, search for a word like “trigger” or “jerk” and the solution you found shows up.</p></div>`;
-  else if (!list.length) empty = `<div class="empty">${q ? `Nothing matches “${esc(q)}”.` : NB.cat === 'open' ? 'No open problems. Nice work.' : `No notes in ${esc(catName(NB.cat))} yet.`}</div>`;
+  else if (!listHtml) empty = `<div class="empty">${q ? `Nothing matches “${esc(q)}”.` : NB.cat === 'open' ? 'No open problems. Nice work.' : `No notes in ${esc(catName(NB.cat))} yet.`}</div>`;
   app.innerHTML = `<div class="wrap">
     <header class="top"><h1>Notebook<small>Technique, problems and maintenance</small></h1>${storageChip()}</header>
     <div class="newrow">
@@ -966,7 +988,7 @@ function renderNotes(app){
       <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
         <input id="nbSearch" type="search" placeholder="Search notes and solutions" value="${esc(q)}" autocomplete="off" aria-label="Search notes"></label>
       <div class="catchips" role="group" aria-label="Category">${chips.map(([k, l, c]) => `<button data-ncat="${k}" aria-pressed="${NB.cat === k}" class="${k === 'open' && c ? 'warnchip' : ''}">${esc(l)}<span>${c}</span></button>`).join('')}</div>
-      <div id="nbList">${list.length ? `<div class="list">${rows}</div>` : empty}</div>
+      <div id="nbList">${listHtml || empty}</div>
     </div></div>`;
 }
 function growTitle(){ const t = $('#n_title'); if (t){ t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
@@ -987,6 +1009,7 @@ function renderNote(app){
       <label class="f">Category<select id="n_cat" data-nfield="cat">${NOTE_CATS.map(([k, l]) => `<option value="${k}" ${n.cat === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
       <label class="f">Type<select id="n_kind" data-nfield="kind"><option value="note" ${!prob ? 'selected' : ''}>Technique note</option><option value="problem" ${prob ? 'selected' : ''}>Problem</option></select></label>
     </div>
+    ${n.ref && MANUAL.find(m => m.id === n.ref) ? `<div style="margin-top:12px"><button class="btn" data-manual="${n.ref}">${ICON.book}Manual: ${esc(MANUAL.find(m => m.id === n.ref).t)}</button></div>` : ''}
     <div class="section"><label class="f" for="n_body">${prob ? 'What happens' : 'Note'}</label>
       <textarea id="n_body" data-nfield="body" style="margin-top:6px;min-height:${prob ? 120 : 220}px" placeholder="${prob ? 'Describe the mistake: when it happens, where the shots go, how it feels.' : 'Write what you learned or want to remember.'}">${esc(n.body)}</textarea></div>
     ${prob ? `<div class="section"><label class="f" for="n_sol">Solution</label>
@@ -996,6 +1019,128 @@ function renderNote(app){
       ${solved && n.solvedAt ? `<p class="hint">Solved on ${esc(shortDate(n.solvedAt))}.</p>` : ''}</div>` : ''}
     <p class="hint" style="margin-top:14px">Written ${esc(shortDate(n.createdAt))}${n.updatedAt - n.createdAt > 6e4 ? ` · changed ${esc(shortDate(n.updatedAt))}` : ''}. Saved automatically.</p>
     <div class="section"><button class="btn danger" data-act="delnote">${ICON.del}Delete ${prob ? 'problem' : 'note'}</button><div id="nDelConfirm"></div></div>
+  </div>`;
+}
+
+// ---------- Steyr evo 10 operator's manual (2026 edition), built into the notebook ----------
+// Text follows the English section of the manual. Lines starting "!" are the manual's warnings,
+// "• " are list items, "+ " are details only in the German/French edition, "Tip:" is an app tip.
+const MANUAL_SRC = 'Steyr evo 10 operator’s manual, 2026 edition';
+const MANUAL = [
+  {id: 'm-safety', g: 'Safety', t: 'Safety rules', p: 18, kw: 'ασφάλεια κανόνες προστασία γυαλιά ωτοασπίδες αποθήκευση', b: [
+    'All firearms are dangerous objects. Use and store them with the utmost caution.',
+    'Always treat an unloaded pistol as if it were loaded.',
+    'Never put your finger on the trigger, except when actually firing a shot or dry firing.',
+    'Always keep the pistol pointing in a safe direction. Only a pistol in perfect condition is safe.',
+    'Store the pistol out of the reach of unauthorised persons.',
+    'Wear approved eye and hearing protection when shooting.']},
+  {id: 'm-data', g: 'Basics', t: '1 Technical data', p: 20, kw: 'τεχνικά χαρακτηριστικά διαστάσεις βάρος μήκος κάννη πίεση διαμέτρημα', b: [
+    '• Calibre: 4.5 mm (.177)', '• Overall height: 148 mm', '• Overall length: 400 mm', '• Overall width: 50 mm', '• Weight: 968 g',
+    '• Sight length: adjustable from 316 to 365 mm', '• Front sight: movable', '• Rear sight: adjustable from 1.5 to 6.5 mm',
+    '• Barrel length: 233 mm', '• Maximum filling pressure: 200 bar', '• Operating pressure: 70 bar']},
+  {id: 'm-dry', g: 'Basics', t: '2 Dry firing', p: 21, kw: 'ξηρή βολή ξηρό στεγνό εκπαίδευση προπόνηση χωρίς βλήμα μοχλός T', b: [
+    'Pull the cocking lever back to the stop (vertical position), then move it forward again until you feel the first resistance. The letter “T” on the casing is still visible.',
+    'The mechanism is now cocked. The trigger behaves exactly as in real shooting, but no compressed air is released.']},
+  {id: 'm-load', g: 'Basics', t: '3 Cocking, loading, firing', p: 21, kw: 'όπλιση γέμισμα φόρτωση βολή μοχλός βλήμα σφαιρίδιο F', b: [
+    'Pull the cocking lever back to the stop. This cocks the pistol and opens the loading port.',
+    'Insert a diabolo pellet and close the cocking lever fully. Only the letter “F” is visible on the casing. The pistol is ready to fire.']},
+  {id: 'm-sight', g: 'Sights', t: '4 Sight adjustment (clicks)', p: 22, kw: 'σκοπευτικά ρύθμιση κλικ ψηλά χαμηλά δεξιά αριστερά βίδα ύψους πλάγια διόρθωση', b: [
+    'Turn the adjusting screws as follows:',
+    '• Shots high: turn the height screw in direction H',
+    '• Shots low: turn the height screw in direction T',
+    '• Shots right: turn the side screw in direction R',
+    '• Shots left: turn the side screw in direction L',
+    'One click moves the point of impact by 1.2 mm at 10 m.',
+    'Tip: each session in this app shows your group centre in millimetres. Divide that distance by 1.2 to get roughly how many clicks to turn. For example, a group 3.6 mm high is about 3 clicks.']},
+  {id: 'm-front', g: 'Sights', t: '4.1–4.2 Front sight: move, change, rotate', p: 22, img: ['front-sight'], kw: 'στόχαστρο μετακίνηση αλλαγή περιστροφή βίδα', b: [
+    'Moving or changing: loosen the countersunk screw at the front of the front-sight carrier. The front sight can then be moved forwards or backwards, or removed and exchanged.',
+    'Rotating: loosen screw 1 to rotate the front sight.']},
+  {id: 'm-rear', g: 'Sights', t: '4.3 Rear sight width and depth', p: 23, img: ['rear-sight-width'], kw: 'εγκοπή κλισιοσκόπιο πίσω σκοπευτικό πλάτος βάθος άνοιγμα', b: [
+    'The rear sight notch width can be set continuously from 1.5 to 7 mm. Turning screw 1 clockwise makes the notch wider.',
+    'The notch depth can be set continuously from 1.8 to 2.6 mm: loosen the two screws 2, slide the rear sight plate to the position you want, and tighten the screws again.']},
+  {id: 'm-rearrot', g: 'Sights', t: '4.4 Rotating the rear sight', p: 23, img: ['rear-sight-rotate'], kw: 'εγκοπή πίσω σκοπευτικό περιστροφή κλίση βίδα 5', b: [
+    'Loosen screw 5 to rotate the rear sight.',
+    '+ German edition: make sure the rear sight does not rest on the grip.']},
+  {id: 'm-trig', g: 'Trigger', t: '5 Trigger adjustment: before you start', p: 24, kw: 'σκανδάλη ρύθμιση εργοστασιακή ISSF άδειο', b: [
+    'The factory setting gives a trigger weight that meets the ISSF rules and a smooth, even release. You can adjust it to suit you.',
+    '! Before changing anything on the trigger, make sure the pistol is NOT loaded.']},
+  {id: 'm-blade', g: 'Trigger', t: '5.1 Trigger blade position', p: 24, img: ['trigger-blade'], kw: 'σκανδάλη πέταλο θέση ύψος γωνία μήκος περιστροφή δάχτυλο', b: [
+    'Loosen countersunk screw 1 to change the rotation and the height of the trigger blade.',
+    'Loosen countersunk screw 2 to change the angle and the forward/back position (length) of the trigger blade.']},
+  {id: 'm-stop', g: 'Trigger', t: '5.2 Trigger stop (after-travel)', p: 25, img: ['trigger-stop'], kw: 'σκανδάλη στοπ διαδρομή μετά τη βολή βίδα 1', b: [
+    'Screw 1 sets how far the trigger blade moves after the shot breaks (“after-travel”).',
+    '• Clockwise: shorter after-travel', '• Anticlockwise: longer after-travel',
+    '! Setting the trigger stop too tight can make the trigger weight and release inconsistent.']},
+  {id: 'm-pull', g: 'Trigger', t: '5.3 First-stage weight (trigger pull force)', p: 26, img: ['trigger-pull'], kw: 'σκανδάλη βάρος δύναμη πρώτο στάδιο βίδα 2 ελαφριά βαριά', b: [
+    'Screw 2 sets the first-stage weight.',
+    '• Clockwise: heavier', '• Anticlockwise: lighter']},
+  {id: 'm-first', g: 'Trigger', t: '5.4 First-stage travel', p: 27, img: ['first-stage'], kw: 'σκανδάλη διαδρομή πρώτο στάδιο νεκρή βίδα 3', b: [
+    'To shorten the first-stage travel, first turn the trigger-stop screw (5.2) a few turns anticlockwise.',
+    'Then use screw 3:', '• Clockwise: shorter first-stage travel', '• Anticlockwise: longer first-stage travel']},
+  {id: 'm-second', g: 'Trigger', t: '5.5 Second-stage weight (release)', p: 28, img: ['second-stage'], kw: 'σκανδάλη βάρος δεύτερο στάδιο απελευθέρωση βίδα 4 λαβή', b: [
+    'Remove the grip first.',
+    'Screw 4 sets the second-stage weight:', '• Clockwise: heavier', '• Anticlockwise: lighter']},
+  {id: 'm-sear', g: 'Trigger', t: '5.6 Sear engagement (do not change)', p: 29, img: ['rear-sear'], kw: 'σκανδάλη εργοστασιακή βίδα 5 κόκκινο βερνίκι μην αλλάξεις', b: [
+    'The engagement between the trigger sear and the trigger lever is set exactly at the factory and must not be changed.',
+    '+ German and French editions: screw 5 is sealed with red lacquer for this reason.']},
+  {id: 'm-grip', g: 'Grip', t: '6 Grip adjustment', p: 30, img: ['grip'], kw: 'λαβή ρύθμιση κλίση περιστροφή θέση βίδες πλαστικό', b: [
+    'The grip can be moved and angled in every direction to suit your shooting position. Remove the grip to adjust it.',
+    'Adjust it with the screws 1 on the underside and the back of the casing.',
+    '! At maximum side offset, make sure the grip does not press against the housing when you tighten the grip screw. It can crack.',
+    '! When mounting the grip on a single-shot pistol, put the plastic plate in.']},
+  {id: 'm-cyl', g: 'Air cylinder', t: '7 Air cylinder: replace and refill', p: 31, kw: 'φιάλη αέρα κύλινδρος γέμισμα πίεση bar αντλία κομπρεσέρ λήξη 10 χρόνια', b: [
+    'Air cylinders must be emptied and disposed of 10 years after the production date. Both the production date and the disposal date are marked on the cylinder. Follow your country’s rules.',
+    'You can unscrew the cylinder by hand at any time, even if it is not empty.',
+    '! Do not tamper with the cylinder or its valve. It can cause injury.',
+    'Fill to a maximum of 200 bar, using only clean, dry compressed air. You can fill it from:',
+    '• a refill bottle (for example a diving bottle)', '• a hand pump', '• a compressor',
+    '+ French edition: 150 bar is plenty for a match.']},
+  {id: 'm-clean', g: 'Cleaning & care', t: '8 Cleaning and care', p: 32, kw: 'καθαρισμός συντήρηση λίπανση γράσο σιλικόνης τσιμούχα o-ring δακτύλιος κάννη τσόχες 1000 βολές', b: [
+    'In normal use the pistol is maintenance-free and needs no oiling.',
+    'Every 1000 shots, lightly grease the O-ring in the loading port and the O-ring on the thread for the air cylinder with acid-free silicone grease. This makes the O-rings last longer.',
+    'To clean the barrel, shoot a few dry (not greased) felt pellets through it, or use cleaning strings. Both are sold by dealers.']},
+  {id: 'm-perf', g: 'Cleaning & care', t: '8 Accuracy and pellets', p: 32, kw: 'ακρίβεια βλήματα σφαιρίδια μάρκα δοκιμή κάννη', b: [
+    'Accuracy depends on many things, and by far the most important is the ammunition. Not every barrel shoots equally well with every pellet, and the differences can be large. Steyr guarantees its accuracy with well-chosen pellets.',
+    'If you test accuracy with the pistol clamped in a rest, clamp it only at the solid trigger guard.']},
+  {id: 'm-more', g: 'Cleaning & care', t: '9–10 Guarantee and parts list', p: 32, kw: 'εγγύηση ανταλλακτικά', b: [
+    'Guarantee conditions: www.steyr-sport.com/en/guarantee-conditions',
+    'Parts list: www.steyr-sport.com',
+    'Manuals download: dms.steyr-sport.com']}
+];
+const MANUAL_GROUPS = ['Safety', 'Basics', 'Sights', 'Trigger', 'Grip', 'Air cylinder', 'Cleaning & care'];
+MANUAL.forEach(m => { m.manual = true; m.cat = 'maintenance'; m.title = m.t; m.body = m.b.join('\n'); });
+function manualRow(m, q){
+  const sn = q ? hitSnippet(m.body, q, 110) : snippet(m.b[0].replace(/^[•!+] /, ''), 100);
+  return `<button class="item note" data-manual="${m.id}"><span class="tag nt man" title="From the manual">${ICON.book}</span>
+    <span style="min-width:0"><div class="t">${esc(m.t)}</div><div class="m">Manual · ${esc(m.g)} · page ${m.p}</div>${sn ? `<div class="sn">${esc(sn)}</div>` : ''}</span></button>`;
+}
+function renderManual(app){
+  const m = MANUAL.find(x => x.id === S.curManual); if (!m){ S.view = 'notes'; return renderNotes(app); }
+  const i = MANUAL.indexOf(m), prev = MANUAL[i - 1], next = MANUAL[i + 1];
+  const line = l => {
+    if (l.startsWith('! ')) return `<div class="mwarn">${esc(l.slice(2))}</div>`;
+    if (l.startsWith('+ ')) return `<p class="hint">${esc(l.slice(2))}</p>`;
+    if (l.startsWith('Tip:')) return `<p class="mtip">${esc(l)}</p>`;
+    return `<p>${esc(l)}</p>`;
+  };
+  let body = '', list = [];
+  const flush = () => { if (list.length){ body += `<ul>${list.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`; list = []; } };
+  for (const l of m.b){ if (l.startsWith('• ')){ list.push(l.slice(2)); continue; } flush(); body += line(l); }
+  flush();
+  const mine = allNotes().filter(n => n.ref === m.id);
+  app.innerHTML = `<div class="wrap">
+    <header class="top"><button class="iconbtn" data-act="noteback" aria-label="Back to notebook">${ICON.back}</button>
+      <div class="grow" style="min-width:0"><span class="chip">Manual · ${esc(m.g)}</span></div></header>
+    <h2 class="mtitle">${esc(m.t)}</h2>
+    <div class="prose mbody">${body}</div>
+    ${(m.img || []).map(f => `<figure class="mfig"><img src="manual/${f}.png" alt="Diagram from the manual for ${esc(m.t)}" loading="lazy"></figure>`).join('')}
+    <p class="hint">Source: ${MANUAL_SRC}, page ${m.p}.</p>
+    <div class="section"><p class="eyebrow">My notes on this</p>
+      ${mine.length ? `<div class="list" style="margin-bottom:10px">${mine.map(n => `<button class="item note" data-note="${n.id}"><span class="tag nt">N</span><span style="min-width:0"><div class="t">${esc(n.title || 'Untitled note')}</div><div class="m">${esc(shortDate(n.updatedAt))}</div>${n.body ? `<div class="sn">${esc(snippet(n.body, 110))}</div>` : ''}</span></button>`).join('')}</div>` : '<p class="hint">Write down your own settings or experience, for example “Screw 2: half a turn clockwise”.</p>'}
+      <button class="btn" data-act="manualnote" data-ref="${m.id}">${ICON.plus}Add my note</button></div>
+    <div class="mnav">
+      ${prev ? `<button class="btn" data-manual="${prev.id}"><span>← Previous</span><b>${esc(prev.t)}</b></button>` : '<span></span>'}
+      ${next ? `<button class="btn" data-manual="${next.id}" style="text-align:right;align-items:flex-end"><span>Next →</span><b>${esc(next.t)}</b></button>` : '<span></span>'}</div>
   </div>`;
 }
 
@@ -1009,10 +1154,12 @@ document.addEventListener('click', ev => {
   if (t.dataset.shot){ ui.sel = ui.sel === t.dataset.shot ? null : t.dataset.shot; if (ui.tv){ ui.tv.sel = ui.sel; ui.tv.render(); } refreshShots(); return; }
   if (t.dataset.nudge){ const [dx, dy] = t.dataset.nudge.split(',').map(Number); ui.tv?.nudge(dx, dy); return; }
   if (t.dataset.note){ S.curNote = t.dataset.note; S.view = 'note'; NB.confirmDel = false; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.manual){ S.curManual = t.dataset.manual; S.view = 'manual'; render(); window.scrollTo(0, 0); return; }
   if (t.dataset.ncat){ NB.cat = t.dataset.ncat; render(); return; }
   if (t.dataset.nstatus){ const n = S.notes[S.curNote]; n.status = t.dataset.nstatus; n.solvedAt = n.status === 'solved' ? Date.now() : null; touchNote(n); render(); toast(n.status === 'solved' ? 'Marked as solved' : 'Marked as still a problem'); return; }
   const a = t.dataset.act;
   if (a === 'newnote') return newNote('note');
+  if (a === 'manualnote'){ const m = MANUAL.find(x => x.id === t.dataset.ref); const n = {id: 'note_' + uid(), kind: 'note', cat: 'maintenance', ref: m.id, title: 'My notes: ' + m.t, body: '', solution: '', status: 'open', createdAt: Date.now(), updatedAt: Date.now()}; touchNote(n); S.curNote = n.id; S.view = 'note'; render(); window.scrollTo(0, 0); setTimeout(() => $('#n_body')?.focus(), 50); return; }
   if (a === 'newproblem') return newNote('problem');
   if (a === 'showopen'){ NB.cat = 'open'; NB.q = ''; S.view = 'notes'; render(); window.scrollTo(0, 0); return; }
   if (a === 'noteback'){ const n = S.notes[S.curNote]; if (n && !n.title.trim() && !n.body.trim() && !(n.solution || '').trim()){ delete S.notes[n.id]; writeCache(); } S.view = 'notes'; render(); return; }

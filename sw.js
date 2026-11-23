@@ -1,7 +1,8 @@
 // Air Pistol Log offline support.
 // Opens instantly from the saved copy, then quietly fetches any newer version for the next start.
-const V = 'apl-v3';
-const CORE = ['./', './index.html', './manifest.webmanifest', './icon-512.png'];
+const V = 'apl-v4';
+const CORE = ['./', './index.html', './manifest.webmanifest', './icon-512.png',
+  './manual/front-sight.png', './manual/rear-sight-width.png', './manual/rear-sight-rotate.png', './manual/trigger-blade.png', './manual/trigger-stop.png', './manual/trigger-pull.png', './manual/first-stage.png', './manual/second-stage.png', './manual/rear-sear.png', './manual/grip.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(V).then(c => c.addAll(CORE)).then(() => self.skipWaiting()));
