@@ -141,7 +141,7 @@ textarea{min-height:110px;resize:vertical;line-height:1.5}
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px;font-size:14px}
 /* tabs */
 .tabs{position:fixed;left:0;right:0;bottom:0;z-index:6;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-.tabs .in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr)}
+.tabs .in{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
 .tabs button{border:0;background:transparent;padding:10px 4px 9px;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;font-weight:600;color:var(--muted)}
 .tabs button svg{width:22px;height:22px}
 .tabs button[aria-current="page"]{color:var(--accent)}
@@ -168,6 +168,24 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 .prose p{margin:0 0 10px}
 .prose ul{margin:0 0 10px;padding-left:20px}
 .mono{font-family:var(--f-mono)}
+textarea.titlein.ta{border:0;border-radius:0;background:transparent;resize:none;overflow:hidden;min-height:0;padding:2px 0;line-height:1.15;font-size:26px}
+.search{display:flex;align-items:center;gap:8px;border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:0 12px;margin-bottom:10px}
+.search:focus-within{border-color:var(--accent)}
+.search svg{width:18px;height:18px;color:var(--muted);flex:none}
+.search input{border:0;background:transparent;padding:11px 0;font-size:16px;width:100%;min-width:0;outline:none}
+.catchips{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none}
+.catchips::-webkit-scrollbar{display:none}
+.catchips button{flex:none;border:1px solid var(--line);background:transparent;border-radius:99px;padding:5px 11px;font-size:13px;font-weight:500;color:var(--muted);display:inline-flex;gap:6px;align-items:center}
+.catchips button span{font-family:var(--f-mono);font-size:11px;opacity:.75}
+.catchips button.warnchip{color:var(--warn);border-color:var(--warn)}
+.catchips button[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.item.note{grid-template-columns:auto 1fr;align-items:start}
+.tag.nt{font-size:15px}
+.tag.nt.open{background:transparent;color:var(--warn);box-shadow:inset 0 0 0 2px var(--warn)}
+.tag.nt.ok{background:transparent;color:var(--good);box-shadow:inset 0 0 0 2px var(--good)}
+.item .sn{font-size:13.5px;color:var(--ink);opacity:.85;margin-top:3px;overflow-wrap:anywhere}
+.item .sn.sol b{color:var(--good);font-weight:600}
+.probbar{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid var(--warn);color:var(--warn);border-radius:8px;padding:8px 10px;font-size:14px;margin-bottom:12px;background:transparent;width:100%;text-align:left;font-weight:500}
 @media (max-width:520px){
   .kpis{grid-template-columns:repeat(2,1fr)}
   .score-hero .big{font-size:52px}
@@ -178,6 +196,7 @@ input[type=range]{width:100%;accent-color:var(--accent)}
 <div id="app"></div>
 <nav class="tabs" aria-label="Main"><div class="in">
   <button data-tab="home"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>Log</button>
+  <button data-tab="notes"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h10l3 3v15H6z"/><path d="M9 9h7M9 13h7M9 17h4"/></svg>Notes</button>
   <button data-tab="progress"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20h18M5 16l4-5 4 3 6-8"/></svg>Progress</button>
   <button data-tab="data"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0l-4-4m4 4l4-4M4 17v3h16v-3"/></svg>Data</button>
 </div></nav>
@@ -454,7 +473,7 @@ function matchExisting(holes, existing, tol){
 /*CORE-END*/
 
 // ---------- app state & storage ----------
-const S = {sessions: {}, view: 'home', cur: null, filter: 'all', storage: 'loading', db: null, uid: null, dl: null, loadNote: ''};
+const S = {sessions: {}, notes: {}, curNote: null, view: 'home', cur: null, filter: 'all', storage: 'loading', db: null, uid: null, dl: null, loadNote: ''};
 const LS_KEY = 'apl.v1';
 const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
 const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
@@ -467,15 +486,15 @@ const LB_KEY = 'apl.lastBackup';
 function getLastBackup(){ try { return +localStorage.getItem(LB_KEY) || 0; } catch (e){ return 0; } }
 function setLastBackup(){ try { localStorage.setItem(LB_KEY, String(Date.now())); } catch (e){} }
 function backupDue(){
-  const ses = Object.values(S.sessions); if (!ses.length || cloud.user) return null;
+  const ses = [...Object.values(S.sessions), ...Object.values(S.notes)]; if (!ses.length || cloud.user) return null;
   const last = getLastBackup(), changed = Math.max(...ses.map(s => s.updatedAt || 0));
   if (changed <= last) return null;
   if (last && Date.now() - last < 7 * 864e5) return null;
   return last;
 }
 function agoText(t){ const d = Math.floor((Date.now() - t) / 864e5); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`; }
-function readCache(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); S.cacheUid = j.uid || null; return j.sessions || {}; } catch (e){ return {}; } }
-function writeCache(){ try { localStorage.setItem(LS_KEY, JSON.stringify({sessions: S.sessions, uid: S.cacheUid || null})); } catch (e){} }
+function readCache(){ try { const j = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); S.cacheUid = j.uid || null; S.notes = j.notes || {}; return j.sessions || {}; } catch (e){ return {}; } }
+function writeCache(){ try { localStorage.setItem(LS_KEY, JSON.stringify({sessions: S.sessions, notes: S.notes, uid: S.cacheUid || null})); } catch (e){} }
 
 // ---------- Google account sync (Firebase sign-in + Firestore) ----------
 // The firebaseConfig object from the Firebase console goes here.
@@ -582,7 +601,7 @@ function acctHtml(){
   }
   return err + `<p>Sign in to save your sessions to your Google account automatically. Sessions already on this phone are added to your account.</p><button class="btn primary" data-act="signin">Sign in with Google</button>`;
 }
-const isTyping = () => { const a = document.activeElement; return a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && S.view === 'session'; };
+const isTyping = () => { const a = document.activeElement; return a && (a.tagName === 'TEXTAREA' || a.tagName === 'INPUT') && (S.view === 'session' || S.view === 'note' || S.view === 'notes'); };
 
 // ---------- sessions ----------
 function newSession(type){
@@ -717,10 +736,13 @@ function storageChip(){
 }
 function updateChip(){ document.querySelectorAll('.chip.st').forEach(el => { el.outerHTML = storageChip(); }); }
 function render(){
-  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === (S.view === 'session' ? 'home' : S.view) ? 'page' : 'false'));
+  const tab = S.view === 'session' ? 'home' : S.view === 'note' ? 'notes' : S.view;
+  document.querySelectorAll('.tabs button').forEach(b => b.setAttribute('aria-current', b.dataset.tab === tab ? 'page' : 'false'));
   const app = $('#app');
   if (S.view === 'session' && curSession()) return renderSession(app);
   if (S.view === 'session') S.view = 'home';
+  if (S.view === 'note'){ renderNote(app); growTitle(); return; }
+  if (S.view === 'notes') return renderNotes(app);
   if (S.view === 'progress') return renderProgress(app);
   if (S.view === 'data') return renderData(app);
   renderHome(app);
@@ -752,7 +774,8 @@ function renderHome(app){
     <header class="top"><h1>Air Pistol Log<small>ISSF 10 m · 4.5 mm</small></h1>${storageChip()}</header>
     ${S.loadNote ? `<div class="warnbox" style="margin-bottom:12px">${esc(S.loadNote)}</div>` : ''}
     ${FIREBASE_CONFIG && cloud.ready && !cloud.user ? `<div class="warnbox row" style="margin-bottom:12px;justify-content:space-between"><span>Sign in with Google to save your sessions automatically.</span><button class="btn" data-act="signin">Sign in</button></div>` : ''}
-    ${(() => { const due = backupDue(); if (due === null) return ''; return `<div class="warnbox row" style="margin-bottom:12px;justify-content:space-between"><span>${due ? `Last backup ${agoText(due)}.` : 'You haven’t made a backup yet.'} Save one to Google Drive so you don’t lose your sessions.</span><button class="btn" data-act="backupnow">Back up now</button></div>`; })()}
+    ${(() => { const due = backupDue(); if (due === null) return ''; return `<div class="warnbox row" style="margin-bottom:12px;justify-content:space-between"><span>${due ? `Last backup ${agoText(due)}.` : 'You haven’t made a backup yet.'} Save one to Google Drive so you don’t lose your sessions and notes.</span><button class="btn" data-act="backupnow">Back up now</button></div>`; })()}
+    ${(() => { const k = openProblems().length; return k ? `<button class="probbar" data-act="showopen"><span>${k} open problem${k > 1 ? 's' : ''} in your notebook</span><span aria-hidden="true">→</span></button>` : ''; })()}
     <div class="newrow">
       <button class="newbtn" data-new="practice"><b>New practice</b><span>Free shooting, any number of shots</span></button>
       <button class="newbtn c" data-new="competition"><b>New competition</b><span>Final score, series and notes</span></button>
@@ -879,6 +902,103 @@ function refreshComp(){
   $('#serCheck').innerHTML = msg;
 }
 
+// ---------- notebook: technique notes and problems ----------
+const NOTE_CATS = [
+  ['trigger', 'Trigger'], ['sights', 'Sights & aiming'], ['stability', 'Stability & hold'], ['position', 'Position & stance'],
+  ['grip', 'Grip'], ['breathing', 'Breathing'], ['mental', 'Mental & routine'], ['maintenance', 'Pistol maintenance'], ['other', 'Other']
+];
+const catName = k => (NOTE_CATS.find(c => c[0] === k) || NOTE_CATS[NOTE_CATS.length - 1])[1];
+const NB = {q: '', cat: 'all', confirmDel: false};
+// Search ignores capitals, Greek accents and final ς, so "τονος" finds "Τόνος".
+const norm = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ς/g, 'σ');
+function noteText(n){ return norm([n.title, n.body, n.solution, catName(n.cat)].join(' \n ')); }
+function noteMatches(n, q){ const words = norm(q).split(/\s+/).filter(Boolean); if (!words.length) return true; const t = noteText(n); return words.every(w => t.includes(w)); }
+function allNotes(){ return Object.values(S.notes).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); }
+function openProblems(){ return Object.values(S.notes).filter(n => n.kind === 'problem' && n.status !== 'solved'); }
+function touchNote(n){ n.updatedAt = Date.now(); S.notes[n.id] = n; writeCache(); }
+function newNote(kind){
+  const cat = NB.cat !== 'all' && NB.cat !== 'open' ? NB.cat : (kind === 'problem' ? 'trigger' : 'trigger');
+  const n = {id: 'note_' + uid(), kind, cat, title: '', body: '', solution: '', status: 'open', createdAt: Date.now(), updatedAt: Date.now()};
+  touchNote(n); S.curNote = n.id; S.view = 'note'; NB.confirmDel = false; render(); window.scrollTo(0, 0);
+  setTimeout(() => $('#n_title')?.focus(), 50);
+}
+function shortDate(t){ return t ? new Date(t).toLocaleDateString(undefined, {day: 'numeric', month: 'short', year: 'numeric'}) : ''; }
+function snippet(t, n){ t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t; }
+// Show the part of the text around the first search word, so the reason it matched is visible.
+function hitSnippet(text, q, n){
+  const words = norm(q).split(/\s+/).filter(Boolean); const flat = String(text || '').replace(/\s+/g, ' ').trim();
+  if (!words.length) return snippet(flat, n);
+  const nf = norm(flat); let i = -1; for (const w of words){ const k = nf.indexOf(w); if (k >= 0 && (i < 0 || k < i)) i = k; }
+  if (i < 0) return snippet(flat, n);
+  const start = Math.max(0, i - 30); return (start ? '…' : '') + snippet(flat.slice(start), n);
+}
+function renderNotes(app){
+  const all = allNotes(), q = NB.q;
+  let list = all.filter(n => noteMatches(n, q));
+  if (NB.cat === 'open') list = list.filter(n => n.kind === 'problem' && n.status !== 'solved');
+  else if (NB.cat !== 'all') list = list.filter(n => n.cat === NB.cat);
+  const count = k => all.filter(n => n.cat === k).length, nOpen = openProblems().length;
+  const chips = [['all', 'All', all.length], ['open', 'Open problems', nOpen], ...NOTE_CATS.map(([k, l]) => [k, l, count(k)])];
+  const rows = list.map(n => {
+    const prob = n.kind === 'problem', solved = prob && n.status === 'solved';
+    const tag = prob ? (solved ? '<span class="tag nt ok" title="Solved problem">✓</span>' : '<span class="tag nt open" title="Open problem">!</span>') : '<span class="tag nt" title="Technique note">N</span>';
+    const main = q ? hitSnippet(prob ? (n.body + ' ' + n.solution) : n.body, q, 110) : snippet(n.body, 110);
+    return `<button class="item note" data-note="${n.id}">${tag}
+      <span style="min-width:0"><div class="t">${esc(n.title || (prob ? 'Untitled problem' : 'Untitled note'))}</div>
+        <div class="m">${esc(catName(n.cat))} · ${prob ? (solved ? 'Solved' : 'Open problem') : 'Note'} · ${esc(shortDate(n.updatedAt))}</div>
+        ${main ? `<div class="sn">${esc(main)}</div>` : ''}
+        ${solved && n.solution && !q ? `<div class="sn sol"><b>Solution:</b> ${esc(snippet(n.solution, 110))}</div>` : ''}</span></button>`;
+  }).join('');
+  let empty = '';
+  if (!all.length) empty = `<div class="empty prose" style="text-align:left;margin:0 auto">
+      <p><b>Your shooting notebook is empty.</b></p>
+      <p>Use <b>New note</b> for what you learn about technique: trigger, sights, hold, stance, grip, and pistol maintenance.</p>
+      <p>Use <b>New problem</b> when something goes wrong. Write what happened, and the solution when you find it. Open problems stay on your list until you mark them solved.</p>
+      <p>Later, search for a word like “trigger” or “jerk” and the solution you found shows up.</p></div>`;
+  else if (!list.length) empty = `<div class="empty">${q ? `Nothing matches “${esc(q)}”.` : NB.cat === 'open' ? 'No open problems. Nice work.' : `No notes in ${esc(catName(NB.cat))} yet.`}</div>`;
+  app.innerHTML = `<div class="wrap">
+    <header class="top"><h1>Notebook<small>Technique, problems and maintenance</small></h1>${storageChip()}</header>
+    <div class="newrow">
+      <button class="newbtn" data-act="newnote"><b>New note</b><span>Technique or maintenance</span></button>
+      <button class="newbtn c" data-act="newproblem"><b>New problem</b><span>A mistake and its solution</span></button>
+    </div>
+    <div class="section">
+      <label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        <input id="nbSearch" type="search" placeholder="Search notes and solutions" value="${esc(q)}" autocomplete="off" aria-label="Search notes"></label>
+      <div class="catchips" role="group" aria-label="Category">${chips.map(([k, l, c]) => `<button data-ncat="${k}" aria-pressed="${NB.cat === k}" class="${k === 'open' && c ? 'warnchip' : ''}">${esc(l)}<span>${c}</span></button>`).join('')}</div>
+      <div id="nbList">${list.length ? `<div class="list">${rows}</div>` : empty}</div>
+    </div></div>`;
+}
+function growTitle(){ const t = $('#n_title'); if (t){ t.style.height = 'auto'; t.style.height = t.scrollHeight + 'px'; } }
+document.addEventListener('keydown', ev => { if (ev.target.id === 'n_title' && ev.key === 'Enter'){ ev.preventDefault(); $('#n_body')?.focus(); } });
+function refreshNoteList(){
+  // redraw only the list so the search box keeps focus while typing
+  const app = document.createElement('div'); renderNotes(app);
+  const fresh = app.querySelector('#nbList'); if (fresh && $('#nbList')) $('#nbList').replaceWith(fresh);
+}
+function renderNote(app){
+  const n = S.notes[S.curNote]; if (!n){ S.view = 'notes'; return renderNotes(app); }
+  const prob = n.kind === 'problem', solved = n.status === 'solved';
+  app.innerHTML = `<div class="wrap">
+    <header class="top"><button class="iconbtn" data-act="noteback" aria-label="Back to notebook">${ICON.back}</button>
+      <div class="grow" style="min-width:0"><span class="chip">${prob ? (solved ? 'Solved problem' : 'Open problem') : 'Technique note'}</span></div>${storageChip()}</header>
+    <textarea class="titlein ta" id="n_title" data-nfield="title" rows="1" placeholder="${prob ? 'Problem, e.g. Shots pulled low-left' : 'Title, e.g. Trigger pre-travel'}" aria-label="Title">${esc(n.title)}</textarea>
+    <div class="meta" style="margin-top:10px">
+      <label class="f">Category<select id="n_cat" data-nfield="cat">${NOTE_CATS.map(([k, l]) => `<option value="${k}" ${n.cat === k ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select></label>
+      <label class="f">Type<select id="n_kind" data-nfield="kind"><option value="note" ${!prob ? 'selected' : ''}>Technique note</option><option value="problem" ${prob ? 'selected' : ''}>Problem</option></select></label>
+    </div>
+    <div class="section"><label class="f" for="n_body">${prob ? 'What happens' : 'Note'}</label>
+      <textarea id="n_body" data-nfield="body" style="margin-top:6px;min-height:${prob ? 120 : 220}px" placeholder="${prob ? 'Describe the mistake: when it happens, where the shots go, how it feels.' : 'Write what you learned or want to remember.'}">${esc(n.body)}</textarea></div>
+    ${prob ? `<div class="section"><label class="f" for="n_sol">Solution</label>
+      <textarea id="n_sol" data-nfield="solution" style="margin-top:6px" placeholder="What fixed it, or what you are trying. Leave empty if you haven’t found one yet.">${esc(n.solution)}</textarea>
+      <div class="row" style="margin-top:10px"><span class="hint" style="margin:0">Status</span>
+        <div class="seg" role="group" aria-label="Status"><button data-nstatus="open" aria-pressed="${!solved}">Still a problem</button><button data-nstatus="solved" aria-pressed="${solved}">Solved</button></div></div>
+      ${solved && n.solvedAt ? `<p class="hint">Solved on ${esc(shortDate(n.solvedAt))}.</p>` : ''}</div>` : ''}
+    <p class="hint" style="margin-top:14px">Written ${esc(shortDate(n.createdAt))}${n.updatedAt - n.createdAt > 6e4 ? ` · changed ${esc(shortDate(n.updatedAt))}` : ''}. Saved automatically.</p>
+    <div class="section"><button class="btn danger" data-act="delnote">${ICON.del}Delete ${prob ? 'problem' : 'note'}</button><div id="nDelConfirm"></div></div>
+  </div>`;
+}
+
 // ---------- events ----------
 document.addEventListener('click', ev => {
   const t = ev.target.closest('button'); if (!t) return;
@@ -888,7 +1008,17 @@ document.addEventListener('click', ev => {
   if (t.dataset.filter){ S.filter = t.dataset.filter; render(); return; }
   if (t.dataset.shot){ ui.sel = ui.sel === t.dataset.shot ? null : t.dataset.shot; if (ui.tv){ ui.tv.sel = ui.sel; ui.tv.render(); } refreshShots(); return; }
   if (t.dataset.nudge){ const [dx, dy] = t.dataset.nudge.split(',').map(Number); ui.tv?.nudge(dx, dy); return; }
+  if (t.dataset.note){ S.curNote = t.dataset.note; S.view = 'note'; NB.confirmDel = false; render(); window.scrollTo(0, 0); return; }
+  if (t.dataset.ncat){ NB.cat = t.dataset.ncat; render(); return; }
+  if (t.dataset.nstatus){ const n = S.notes[S.curNote]; n.status = t.dataset.nstatus; n.solvedAt = n.status === 'solved' ? Date.now() : null; touchNote(n); render(); toast(n.status === 'solved' ? 'Marked as solved' : 'Marked as still a problem'); return; }
   const a = t.dataset.act;
+  if (a === 'newnote') return newNote('note');
+  if (a === 'newproblem') return newNote('problem');
+  if (a === 'showopen'){ NB.cat = 'open'; NB.q = ''; S.view = 'notes'; render(); window.scrollTo(0, 0); return; }
+  if (a === 'noteback'){ const n = S.notes[S.curNote]; if (n && !n.title.trim() && !n.body.trim() && !(n.solution || '').trim()){ delete S.notes[n.id]; writeCache(); } S.view = 'notes'; render(); return; }
+  if (a === 'delnote'){ $('#nDelConfirm').innerHTML = `<div class="confirm">Delete this for good? <button class="btn danger" data-act="delnoteyes">Delete</button><button class="btn" data-act="delnoteno">Keep</button></div>`; return; }
+  if (a === 'delnoteno'){ $('#nDelConfirm').innerHTML = ''; return; }
+  if (a === 'delnoteyes'){ delete S.notes[S.curNote]; writeCache(); S.view = 'notes'; render(); toast('Deleted'); return; }
   if (a === 'back'){ S.view = 'home'; ui.reset(); render(); return; }
   if (a === 'cam') return $('#fileCam').click();
   if (a === 'gal') return $('#fileGal').click();
@@ -911,7 +1041,15 @@ document.addEventListener('click', ev => {
   if (a === 'pasteok') return importText($('#pasteText').value);
 });
 document.addEventListener('input', ev => {
-  const el = ev.target; if (S.view !== 'session') return; const s = curSession(); if (!s || s.example) return;
+  const el = ev.target;
+  if (el.id === 'nbSearch'){ NB.q = el.value; refreshNoteList(); return; }
+  if (el.dataset.nfield && S.view === 'note'){
+    const n = S.notes[S.curNote]; if (!n) return; n[el.dataset.nfield] = el.value; touchNote(n);
+    if (el.dataset.nfield === 'title'){ if (/\n/.test(n.title)){ n.title = n.title.replace(/\n+/g, ' '); el.value = n.title; touchNote(n); } growTitle(); }
+    if (el.dataset.nfield === 'kind') render();
+    return;
+  }
+  if (S.view !== 'session') return; const s = curSession(); if (!s || s.example) return;
   if (el.dataset.field){ s[el.dataset.field] = el.value; touch(s); return; }
   if (el.dataset.comp){ s.comp[el.dataset.comp] = el.dataset.comp === 'format' ? +el.value : el.value; touch(s); if (el.dataset.comp === 'format'){ renderSession($('#app')); return; } refreshComp(); return; }
   if (el.dataset.ser !== undefined){ s.comp.series = s.comp.series || []; s.comp.series[+el.dataset.ser] = el.value; touch(s); refreshComp(); }
@@ -1078,11 +1216,11 @@ function renderProgress(app){
 
 // ---------- data ----------
 function renderData(app){
-  const n = Object.keys(S.sessions).length, shots = Object.values(S.sessions).reduce((a, s) => a + s.shots.length, 0);
+  const n = Object.keys(S.sessions).length, shots = Object.values(S.sessions).reduce((a, s) => a + s.shots.length, 0), nNotes = Object.keys(S.notes).length;
   app.innerHTML = `<div class="wrap"><header class="top"><h1>Data<small>Backup, export and scanning tips</small></h1>${storageChip()}</header>
     ${FIREBASE_CONFIG ? `<div class="section"><p class="eyebrow">Google account</p><div class="panel prose" id="acctBox">${acctHtml()}</div></div>` : ''}
     <div class="section"><p class="eyebrow">Backup</p><div class="panel prose">
-      <p><b>${n}</b> session${n === 1 ? '' : 's'}, <b>${shots}</b> shots. Last backup: <b>${getLastBackup() ? new Date(getLastBackup()).toLocaleDateString() : 'never'}</b>.</p>
+      <p><b>${n}</b> session${n === 1 ? '' : 's'}, <b>${shots}</b> shots, <b>${nNotes}</b> note${nNotes === 1 ? '' : 's'}. Last backup: <b>${getLastBackup() ? new Date(getLastBackup()).toLocaleDateString() : 'never'}</b>.</p>
       <p>${cloud.user ? 'Your sessions save to your Google account automatically. A backup file is optional extra safety.' : 'Your sessions are saved on this phone, inside this app. Export a backup now and then (for example to Google Drive or Files) so you can restore them if you change phone.'}</p>
       <div class="row"><button class="btn primary" data-act="expjson">Export backup (.json)</button><button class="btn" data-act="expcsv">Sessions (.csv)</button><button class="btn" data-act="expshots">All shots (.csv)</button><button class="btn" data-act="import">Import backup file</button><button class="btn" data-act="paste">Paste backup text</button></div>
       <div id="pasteBox"></div>
@@ -1104,7 +1242,7 @@ function renderData(app){
 function toCSV(rows){ return rows.map(r => r.map(v => { const s = String(v ?? ''); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }).join(',')).join('\n'); }
 async function exportFile(kind){
   const ses = allSessions(); let name, data;
-  if (kind === 'json'){ name = `air-pistol-log-${today()}.json`; data = JSON.stringify({app: 'air-pistol-log', version: 1, exportedAt: new Date().toISOString(), sessions: ses}, null, 1); }
+  if (kind === 'json'){ name = `air-pistol-log-${today()}.json`; data = JSON.stringify({app: 'air-pistol-log', version: 1, exportedAt: new Date().toISOString(), sessions: ses, notes: allNotes()}, null, 1); }
   else if (kind === 'csv'){
     name = `air-pistol-sessions-${today()}.csv`;
     data = toCSV([['date', 'type', 'name', 'place', 'shots', 'total', 'decimal', 'inner_tens', 'avg_per_shot', 'final_score', 'format', 'placement', 'final_decimal', 'notes'],
@@ -1137,13 +1275,19 @@ function importText(txt){
   try {
     const j = JSON.parse(txt); const list = Array.isArray(j) ? j : j.sessions;
     if (!Array.isArray(list)) throw new Error('bad');
-    let n = 0;
+    let n = 0, nn = 0;
+    for (const x of (Array.isArray(j.notes) ? j.notes : [])){
+      if (!x || typeof x.id !== 'string' || !x.id.startsWith('note_')) continue;
+      const loc = S.notes[x.id];
+      if (!loc || (x.updatedAt || 0) > (loc.updatedAt || 0)){ S.notes[x.id] = JSON.parse(JSON.stringify(x)); nn++; }
+    }
+    if (nn) writeCache();
     for (const s of list){
       if (!s || typeof s.id !== 'string' || !s.id.startsWith('ses_') || !Array.isArray(s.shots)) continue;
       const loc = S.sessions[s.id];
       if (!loc || (s.updatedAt || 0) > (loc.updatedAt || 0)){ const c = JSON.parse(JSON.stringify(s)); S.sessions[s.id] = c; c.updatedAt = (s.updatedAt || Date.now()); c.localOnly = true; writeCache(); pushDoc(s.id); n++; }
     }
-    render(); toast(n ? `Imported ${n} session${n > 1 ? 's' : ''}` : 'Nothing new in that file');
+    render(); toast(n || nn ? `Imported ${[n ? `${n} session${n > 1 ? 's' : ''}` : '', nn ? `${nn} note${nn > 1 ? 's' : ''}` : ''].filter(Boolean).join(' and ')}` : 'Nothing new in that file');
   } catch (e){ toast('That is not an Air Pistol Log backup.'); }
 }
 
